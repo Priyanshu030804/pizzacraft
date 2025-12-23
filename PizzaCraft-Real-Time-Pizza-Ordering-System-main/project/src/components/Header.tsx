@@ -26,13 +26,17 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="bg-white shadow-lg sticky top-0 z-50">
+    <header className="glass sticky top-0 z-50 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2" onClick={handleLinkClick}>
-            <Pizza className="h-8 w-8 text-primary-600" />
-            <span className="font-display font-bold text-xl text-gray-900">PizzaCraft</span>
+          <Link to="/" className="flex items-center space-x-2 group" onClick={handleLinkClick}>
+            <div className="bg-primary-500 p-2 rounded-xl group-hover:rotate-12 transition-transform duration-300 shadow-lg">
+              <Pizza className="h-6 w-6 text-white" />
+            </div>
+            <span className="font-display font-extrabold text-2xl tracking-tight text-accent-900 group-hover:text-primary-600 transition-colors">
+              Pizza<span className="text-primary-600">Craft</span>
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
