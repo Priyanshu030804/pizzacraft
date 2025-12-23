@@ -1,0 +1,32 @@
+{
+  "name": "pizza-vamsi-unified",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Unified pizza delivery platform with main website and admin dashboard",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev:backend": "cd project/server && node index.js --port 3002",
+    "dev:frontend": "cd project && npm run dev",
+    "dev:admin": "cd admin-dashboard && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\"",
+    "install:apps": "cd project && npm install --production=false && cd ../admin-dashboard && npm install --production=false && cd ../project/server && npm install",
+    "install:all": "npm install && npm run install:apps",
+    "postinstall": "npm run install:apps",
+    "build:frontend": "cd project && npm run build",
+    "build:admin": "cd admin-dashboard && npm run build",
+    "build:server": "cd project/server && npm install --omit=dev",
+    "build:copy": "node scripts/copy-builds.js",
+    "build": "npm run build:frontend && npm run build:admin && npm run build:server && npm run build:copy",
+    "start": "node project/server/index.js",
+    "vercel-build": "npm run build",
+    "start:backend": "cd project/server && npm start",
+    "start:frontend": "cd admin-dashboard && npm run dev",
+    "start:all": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
