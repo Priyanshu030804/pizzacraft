@@ -233,6 +233,25 @@ Successfully connected to GitHub:
 The repository is now fully set up with a robust history, multiple branches for development workflows, and a demonstration of handling merge conflicts. All mandatory Git operations have been successfully executed.
 
 
+### Git Workflow Screenshots
+
+Here are the terminal screenshots demonstrating the Git operations performed:
+
+#### 1. Git Initialization and Branching
+![Git Initial Setup](screenshots/git-initial-setup.png)
+
+#### 2. Git Log Graph
+![Git Log Graph](screenshots/git-log-graph.png)
+
+#### 3. Commit History
+![Git Commit History](screenshots/git-commit-history.png)
+
+#### 4. Git Commands and Branch Updates
+![Git Commands](screenshots/git-commands.png)
+
+#### 5. Pushing to Remote
+![Git Push Log](screenshots/git-push-log.png)
+
 ## 📄 License
 
 MIT License - feel free to use this project for your own purposes.
