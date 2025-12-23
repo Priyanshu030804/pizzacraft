@@ -80,73 +80,101 @@ const Home = (): JSX.Element => {
       </section>
 
       {/* Popular Pizzas Section */}
-      <section className="py-24">
+      <section className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="font-display text-4xl md:text-5xl font-black text-accent-900 mb-6">
-              Chef's <span className="text-primary-600">Masterpieces</span>
+          <div className="text-center mb-12">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Customer Favorites
             </h2>
-            <p className="text-xl text-accent-600">
-              Discover why generations have fallen in love with our signature creations
+            <p className="text-xl text-gray-600">
+              Try our most popular pizzas loved by our community
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {[
-              { name: 'Margherita Classic', desc: 'Fresh mozzarella, san marzano tomatoes, fresh basil', price: 299, rating: 4.8, img: 'https://images.pexels.com/photos/315755/pexels-photo-315755.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop' },
-              { name: 'Pepperoni Supreme', desc: 'Premium pepperoni with double mozzarella cheese', price: 359, rating: 4.7, img: 'https://images.pexels.com/photos/1146760/pexels-photo-1146760.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop' },
-              { name: 'Meat Lovers', desc: 'Pepperoni, sausage, bacon, ham, and ground beef', price: 459, rating: 4.9, img: 'https://images.pexels.com/photos/708587/pexels-photo-708587.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop' },
-            ].map((pizza, idx) => (
-              <div key={idx} className="premium-card overflow-hidden group">
-                <div className="overflow-hidden h-64">
-                  <img
-                    src={pizza.img}
-                    alt={pizza.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  />
-                </div>
-                <div className="p-8">
-                  <h3 className="font-bold text-2xl text-accent-900 mb-3 group-hover:text-primary-600 transition-colors">{pizza.name}</h3>
-                  <p className="text-accent-600 mb-6 line-clamp-2">{pizza.desc}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-primary-600 text-2xl">{formatCurrency(pizza.price)}</span>
-                    <div className="flex items-center space-x-2 bg-amber-50 px-3 py-1 rounded-full">
-                      <Star className="h-4 w-4 text-amber-500 fill-current" />
-                      <span className="font-bold text-amber-700">{pizza.rating}</span>
-                    </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+              <img
+                src="https://images.pexels.com/photos/315755/pexels-photo-315755.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop"
+                alt="Margherita Pizza"
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-6">
+                <h3 className="font-semibold text-xl text-gray-900 mb-2">Margherita Classic</h3>
+                <p className="text-gray-600 mb-4">Fresh mozzarella, san marzano tomatoes, fresh basil</p>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-primary-600 text-lg">From {formatCurrency(299)}</span>
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                    <span className="text-sm text-gray-600">4.8</span>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+              <img
+                src="https://images.pexels.com/photos/1146760/pexels-photo-1146760.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop"
+                alt="Pepperoni Pizza"
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-6">
+                <h3 className="font-semibold text-xl text-gray-900 mb-2">Pepperoni Supreme</h3>
+                <p className="text-gray-600 mb-4">Premium pepperoni with mozzarella cheese</p>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-primary-600 text-lg">From {formatCurrency(359)}</span>
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                    <span className="text-sm text-gray-600">4.7</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+              <img
+                src="https://images.pexels.com/photos/708587/pexels-photo-708587.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&fit=crop"
+                alt="Meat Lovers Pizza"
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-6">
+                <h3 className="font-semibold text-xl text-gray-900 mb-2">Meat Lovers</h3>
+                <p className="text-gray-600 mb-4">Pepperoni, sausage, bacon, ham, and ground beef</p>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-primary-600 text-lg">From {formatCurrency(459)}</span>
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                    <span className="text-sm text-gray-600">4.9</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="text-center mt-16">
+          <div className="text-center mt-12">
             <Link
               to="/menu"
-              className="inline-flex items-center space-x-2 text-primary-600 font-bold text-lg hover:text-primary-700 transition-colors group"
+              className="inline-block bg-primary-500 text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary-600 transition-colors"
             >
-              <span>Explore the full menu</span>
-              <span className="group-hover:translate-x-1 transition-transform">→</span>
+              View Full Menu
             </Link>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-24 bg-accent-900 overflow-hidden">
-        <div className="absolute inset-0 bg-primary-600 mix-blend-overlay opacity-20"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative text-center">
-          <h2 className="font-display text-4xl md:text-6xl font-black text-white mb-8">
-            Ready for a <span className="text-primary-500">Slice of Heaven?</span>
+      <section className="bg-primary-600 text-white py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
+            Ready to Order?
           </h2>
-          <p className="text-xl md:text-2xl mb-12 text-accent-200 max-w-2xl mx-auto leading-relaxed">
-            Join thousands of satisfied customers and experience the true art of pizza making.
+          <p className="text-xl mb-8 text-primary-100">
+            Join thousands of satisfied customers and taste the difference
           </p>
           <Link
             to="/menu"
-            className="premium-button bg-primary-500 text-white hover:bg-primary-600 text-xl px-12 inline-block shadow-2xl shadow-primary-500/50"
+            className="inline-block bg-white text-primary-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-100 transition-colors transform hover:scale-105 shadow-lg"
           >
-            Start Your Journey
+            Start Your Order
           </Link>
         </div>
       </section>
