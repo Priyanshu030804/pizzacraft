@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay Test</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            background: #f97316;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pizza Delivery App - Razorpay Test</h1>
+    <div class="container">
+        <h2>Test Payment</h2>
+        <p>Amount: ?499</p>
+        <button id="pay-button">Pay Now</button>
+        <div id="payment-result"></div>
+    </div>
+
+    <script>
+        document.getElementById("pay-button").addEventListener("click", function() {
+            var options = {
+                key: "rzp_test_ODQ3lf6JSSFi9z", 
+                amount: "49900", 
+                currency: "INR",
+                name: "Pizza Delivery",
+                description: "Test Transaction",
+                handler: function (response){
+                    document.getElementById("payment-result").innerHTML = 
+                        "<p>Payment ID: " + response.razorpay_payment_id + "</p>" +
+                        "<p>Order ID: " + response.razorpay_order_id + "</p>" +
+                        "<p>Signature: " + response.razorpay_signature + "</p>";
+                },
+                prefill: {
+                    name: "Test User",
+                    email: "test@example.com",
+                    contact: "9999999999"
+                },
+                notes: {
+                    address: "Test Address"
+                },
+                theme: {
+                    color: "#f97316"
+                }
+            };
+            var rzp = new Razorpay(options);
+            rzp.on("payment.failed", function (response){
+                document.getElementById("payment-result").innerHTML = 
+                    "<p style='color:red'>Payment failed! " + response.error.description + "</p>";
+            });
+            rzp.open();
+        });
+    </script>
+</body>
+</html>

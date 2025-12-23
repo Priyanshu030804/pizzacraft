@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PizzaCraft Port Checker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .online { background-color: #d4edda; color: #155724; }
+        .offline { background-color: #f8d7da; color: #721c24; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🍕 PizzaCraft System Status</h1>
+    
+    <div id="backend-status" class="status offline">
+        ❌ Backend Server (port 3001): Checking...
+    </div>
+    
+    <div id="main-status" class="status offline">
+        ❌ Main Website (port 5173): Checking...
+    </div>
+    
+    <div id="admin-status" class="status offline">
+        ❌ Admin Dashboard (port 5001): Checking...
+    </div>
+    
+    <h2>Quick Links:</h2>
+    <button onclick="window.open('http://localhost:3001/api/health', '_blank')">Test Backend API</button>
+    <button onclick="window.open('http://localhost:5173', '_blank')">Open Main Website</button>
+    <button onclick="window.open('http://localhost:5001', '_blank')">Open Admin Dashboard</button>
+    
+    <button onclick="checkAllPorts()">🔄 Refresh Status</button>
+    
+    <h2>Instructions:</h2>
+    <ol>
+        <li>Double-click <code>start-backend.bat</code> first</li>
+        <li>Double-click <code>start-main.bat</code></li>
+        <li>Double-click <code>start-admin.bat</code></li>
+        <li>Click "Refresh Status" to check if all services are running</li>
+    </ol>
+
+    <script>
+        async function checkPort(port, name, elementId) {
+            try {
+                const response = await fetch(`http://localhost:${port}/`);
+                const element = document.getElementById(elementId);
+                if (response.ok || response.status === 404) {
+                    element.className = 'status online';
+                    element.innerHTML = `✅ ${name} (port ${port}): Online`;
+                } else {
+                    throw new Error('Not responding');
+                }
+            } catch (error) {
+                const element = document.getElementById(elementId);
+                element.className = 'status offline';
+                element.innerHTML = `❌ ${name} (port ${port}): Offline`;
+            }
+        }
+        
+        async function checkAllPorts() {
+            await checkPort(3001, 'Backend Server', 'backend-status');
+            await checkPort(5173, 'Main Website', 'main-status');
+            await checkPort(5001, 'Admin Dashboard', 'admin-status');
+        }
+        
+        // Check on load
+        checkAllPorts();
+        
+        // Auto-refresh every 5 seconds
+        setInterval(checkAllPorts, 5000);
+    </script>
+</body>
+</html>

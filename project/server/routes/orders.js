@@ -1,0 +1,460 @@
+import express from 'express';
+import mongoose from 'mongoose';
+import Order from '../models/Order.js';
+import User from '../models/User.js';
+import { authenticateToken, requireStaff } from '../middleware/auth.js';
+import { sendOrderConfirmationEmail, sendOrderStatusEmail } from '../services/emailService.js';
+import { emitNewOrder, emitOrderUpdate } from '../services/socketService.js';
+
+const router = express.Router();
+
+// Development endpoint for admin dashboard (no auth required)
+router.get('/dev/all', async (req, res) => {
+  try {
+    console.log('🔍 Development endpoint: Fetching all orders...');
+    
+    // For development, return orders from localStorage or a simple query
+    const { limit = 50 } = req.query;
+
+    try {
+      const orders = await Order.find({})
+        .sort({ created_at: -1 })
+        .limit(parseInt(limit))
+        .lean();
+      console.log('✅ Found', orders?.length || 0, 'orders in database');
+      res.json({ orders: orders || [], source: 'database' });
+    } catch (dbError) {
+      console.error('Database connection error:', dbError);
+      res.json({ orders: [], source: 'database_unavailable' });
+    }
+  } catch (error) {
+    console.error('Development endpoint error:', error);
+    res.status(500).json({ error: 'Failed to fetch orders', orders: [] });
+  }
+});
+
+// Development endpoint for updating order status (no auth required)
+router.patch('/dev/:orderId/status', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    
+    console.log('🔄 Development endpoint: Updating order status:', { orderId, status });
+
+    try {
+      const order = await Order.findByIdAndUpdate(
+        orderId,
+        { $set: { status } },
+        { new: true }
+      ).lean();
+
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      console.log('✅ Order status updated in database');
+      res.json({ success: true, order });
+    } catch (dbError) {
+      console.error('Database connection error:', dbError);
+      res.status(500).json({ error: 'Database unavailable' });
+    }
+  } catch (error) {
+    console.error('Development endpoint error:', error);
+    res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+// Create order (requires authentication)
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const {
+      items, // Fix: Changed from cartItems to items to match frontend
+      cartItems, // Keep both for backward compatibility
+      deliveryAddress,
+      specialInstructions,
+      paymentMethod,
+      totalAmount,
+      customerEmail,
+      customerInfo
+    } = req.body;
+
+    // Use items or cartItems (whichever is provided)
+    const orderItems = items || cartItems;
+
+    console.log('📝 Creating order:', { paymentMethod, totalAmount, itemCount: orderItems?.length });
+
+    // Validate required fields
+    if (!orderItems || orderItems.length === 0) {
+      return res.status(400).json({ error: 'Cart items are required' });
+    }
+
+    if (!deliveryAddress) {
+      return res.status(400).json({ error: 'Delivery address is required' });
+    }
+
+    // Generate unique order number
+    const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const userId = req.user?._id; // Must be authenticated user
+
+    // Create order data
+    const orderData = {
+      id: `temp-${Date.now()}`,
+      orderNumber,
+      userId,
+      items: orderItems,
+      deliveryAddress,
+      specialInstructions,
+      paymentMethod,
+      totalAmount,
+      status: paymentMethod === 'cod' ? 'confirmed' : 'pending',
+      createdAt: new Date().toISOString(),
+      estimatedDelivery: new Date(Date.now() + 45 * 60 * 1000).toISOString() // 45 minutes
+    };
+
+    try {
+      // Normalize items (support nested structure from frontend local format)
+      const normalizedItems = (orderItems || []).map(it => {
+        // Local format: { quantity, price, pizzas: { name,... }, pizza_sizes: { name } }
+        if (it.pizzas && it.pizza_sizes) {
+          const unit = it.price || it.unit_price || 0;
+          const qty = it.quantity || 1;
+          return {
+            pizza_id: it.pizza_id && mongoose.Types.ObjectId.isValid(it.pizza_id) ? new mongoose.Types.ObjectId(it.pizza_id) : null,
+            name: it.pizzas.name,
+            image: it.pizzas.image || it.image || null,
+            size: it.pizza_sizes.name,
+            quantity: qty,
+            unit_price: unit,
+            total_price: it.total || it.total_price || unit * qty
+          };
+        }
+        // Flat format already
+        const unit = it.price || it.unit_price || 0;
+        const qty = it.quantity || 1;
+        return {
+          pizza_id: it.pizza_id && mongoose.Types.ObjectId.isValid(it.pizza_id) ? new mongoose.Types.ObjectId(it.pizza_id) : null,
+          name: it.name,
+          image: it.image || null,
+          size: it.size,
+          quantity: qty,
+          unit_price: unit,
+          total_price: it.total || it.total_price || unit * qty
+        };
+      });
+      // Compute proper unit/total pricing on the backend to avoid mismatches
+      // Replace previous hard floor with size-based additive pricing between 75 and 100
+      const SIZE_EXTRA = {
+        small: 75,
+        medium: 85,
+        large: 95,
+        xl: 100
+      };
+      const INGREDIENT_MODIFIER = 10; // per-ingredient additive modifier
+
+      // Gather pizza ids we can resolve
+      const pizzaIdsToFetch = normalizedItems.map(i => i.pizza_id).filter(Boolean);
+      const uniquePizzaIds = [...new Set(pizzaIdsToFetch.map(id => id.toString()))];
+      const Pizza = (await import('../models/Pizza.js')).default;
+      const pizzas = await Pizza.find({ _id: { $in: uniquePizzaIds } }).lean();
+      const pizzaMap = new Map(pizzas.map(p => [p._id.toString(), p]));
+
+      const pricedItems = normalizedItems.map(it => {
+        // If we have the pizza document, compute using base_price and size multiplier
+        if (it.pizza_id) {
+          const pizzaDoc = pizzaMap.get(it.pizza_id.toString());
+          if (pizzaDoc) {
+            const sizeObj = (pizzaDoc.pizza_sizes || []).find(s => s.name.toLowerCase() === (it.size || '').toLowerCase());
+            const multiplier = sizeObj?.price_multiplier || 1;
+            const ingredientCount = (pizzaDoc.ingredients || []).length || 0;
+            const sizeKey = (it.size || '').toLowerCase();
+            const sizeExtra = SIZE_EXTRA[sizeKey] ?? SIZE_EXTRA['medium'];
+            const computedUnit = pizzaDoc.base_price * multiplier + ingredientCount * INGREDIENT_MODIFIER + sizeExtra;
+            const unit_price = Math.round(computedUnit * 100) / 100;
+            const total_price = Math.round(unit_price * (it.quantity || 1) * 100) / 100;
+            return { ...it, unit_price, total_price };
+          }
+        }
+        // Fallback: use provided unit_price but apply a reasonable size extra if size provided
+        const fallbackUnit = typeof it.unit_price === 'number' ? it.unit_price : Number(it.unit_price) || 0;
+        const sizeKey = (it.size || '').toLowerCase();
+        const sizeExtra = SIZE_EXTRA[sizeKey] ?? 0;
+        const unit_price = Math.round((fallbackUnit + sizeExtra) * 100) / 100;
+        const total_price = Math.round(unit_price * (it.quantity || 1) * 100) / 100;
+        return { ...it, unit_price, total_price };
+      });
+
+      // Recompute total amount from priced items
+      const computedTotalAmount = pricedItems.reduce((s, it) => s + (it.total_price || 0), 0);
+
+      if (typeof totalAmount !== 'number' || isNaN(totalAmount)) {
+        // If client didn't supply a number, accept computed one
+        // Otherwise, we will still prefer computedTotalAmount for persistence
+      }
+      const mongoOrder = await Order.create({
+        user_id: userId,
+        order_number: orderNumber,
+        total_amount: computedTotalAmount,
+        status: orderData.status,
+        payment_status: paymentMethod === 'cod' ? 'pending' : 'completed',
+        payment_method: paymentMethod,
+        delivery_address: deliveryAddress,
+        special_instructions: specialInstructions,
+        estimated_delivery_time: new Date(orderData.estimatedDelivery),
+        items: pricedItems
+      });
+      orderData.id = mongoOrder._id.toString();
+
+      // Emit real-time events
+      try {
+        const normalizedForSocket = {
+          id: orderData.id,
+          user_id: mongoOrder.user_id?.toString() || null,
+          status: mongoOrder.status,
+          estimated_delivery: orderData.estimatedDelivery
+        };
+        emitNewOrder(req.io, mongoOrder.toObject ? mongoOrder.toObject() : mongoOrder, null);
+        emitOrderUpdate(req.io, normalizedForSocket);
+      } catch (emitErr) {
+        console.warn('⚠️ Socket emit failed (create):', emitErr.message);
+      }
+    } catch (dbError) {
+      console.log('⚠️ Order persistence failed:', dbError.message);
+      return res.status(500).json({ error: 'Failed to persist order' });
+    }
+
+    // Send confirmation email if customer email is provided
+    try {
+      if (customerEmail || customerInfo?.email) {
+        const email = customerEmail || customerInfo.email;
+        await sendOrderConfirmationEmail(email, orderData);
+        console.log('📧 Confirmation email sent to:', email);
+      }
+    } catch (emailError) {
+      console.error('📧 Email error (non-critical):', emailError.message);
+      // Don't fail the order if email fails
+    }
+
+    console.log('🎉 Order created successfully:', orderNumber);
+
+    res.json({
+      success: true,
+      orderId: orderData.id,
+      orderNumber: orderData.orderNumber,
+      status: orderData.status,
+      totalAmount: totalAmount,
+      estimatedDelivery: orderData.estimatedDelivery
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating order:', error);
+    res.status(500).json({ error: 'Failed to create order: ' + error.message });
+  }
+});
+
+// Get all orders for admin
+router.get('/admin', authenticateToken, requireStaff, async (req, res) => {
+  try {
+    const { status, limit = 50 } = req.query;
+
+    const filter = {};
+    if (status) filter.status = status;
+
+    const orders = await Order.find(filter)
+      .sort({ created_at: -1 })
+      .limit(parseInt(limit))
+      .populate({ path: 'user_id', select: 'first_name last_name email phone' })
+      .lean();
+
+    const mapped = orders.map(o => ({
+      id: o._id.toString(),
+      user_id: o.user_id?._id?.toString() || null,
+      status: o.status,
+      total_amount: o.total_amount,
+      payment_method: o.payment_method,
+      payment_status: o.payment_status,
+      created_at: o.created_at,
+      estimated_delivery: o.estimated_delivery_time,
+      items: o.items,
+      delivery_address: o.delivery_address,
+      special_instructions: o.special_instructions,
+      user: o.user_id ? {
+        first_name: o.user_id.first_name,
+        last_name: o.user_id.last_name,
+        email: o.user_id.email,
+        phone: o.user_id.phone
+      } : null
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+// Get user orders
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { status, limit = 20 } = req.query;
+
+    console.log('📦 Fetching user orders for userId:', userId, 'status:', status, 'limit:', limit);
+
+    const filter = { user_id: userId };
+    if (status) filter.status = status;
+
+    const orders = await Order.find(filter)
+      .sort({ created_at: -1 })
+      .limit(parseInt(limit))
+      .lean();
+    console.log('📦 Found orders count for user:', orders?.length || 0);
+    
+    // Collect unique pizza IDs to fetch images
+    const pizzaIds = orders.flatMap(o => (o.items || []).map(it => it.pizza_id).filter(Boolean));
+    const uniquePizzaIds = [...new Set(pizzaIds)];
+    
+    // Fetch pizza details
+    const Pizza = (await import('../models/Pizza.js')).default;
+    const pizzas = await Pizza.find({ _id: { $in: uniquePizzaIds } }).select('_id name image').lean();
+    const pizzaMap = new Map(pizzas.map(p => [p._id.toString(), p]));
+    
+    const mapped = orders.map(o => ({
+      id: o._id.toString(),
+      status: o.status,
+      total: o.total_amount,
+      created_at: o.created_at,
+      estimated_delivery: o.estimated_delivery_time,
+      delivery_address: o.delivery_address || {},
+      order_items: (o.items || []).map(it => {
+        const pizzaDetails = it.pizza_id ? pizzaMap.get(it.pizza_id.toString()) : null;
+        return {
+          quantity: it.quantity,
+          pizzas: { 
+            name: it.name, 
+            image: it.image || pizzaDetails?.image || 'https://via.placeholder.com/400x300?text=Pizza'
+          },
+          pizza_sizes: { name: it.size }
+        };
+      })
+    }));
+    console.log('📦 Returning mapped user orders length:', mapped?.length || 0);
+    res.json(mapped);
+  } catch (error) {
+    console.error('Error fetching user orders:', error);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+// Update order status
+router.patch('/:orderId/status', authenticateToken, requireStaff, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['pending', 'confirmed', 'preparing', 'baking', 'out-for-delivery', 'delivered', 'cancelled'];
+    
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { $set: { status } },
+      { new: true }
+    ).populate({ path: 'user_id', select: 'email first_name last_name' }).lean();
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Send status update email
+    try {
+      const email = order.user_id?.email;
+      if (email) {
+        await sendOrderStatusEmail(email, order);
+      }
+    } catch (emailError) {
+      console.error('Error sending status update email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    // Emit real-time status update
+    try {
+      const normalizedForSocket = {
+        id: order._id?.toString?.() || order.id,
+        user_id: order.user_id?._id?.toString?.() || order.user_id,
+        status: order.status,
+        estimated_delivery: order.estimated_delivery_time || order.estimated_delivery
+      };
+      emitOrderUpdate(req.io, normalizedForSocket);
+    } catch (emitErr) {
+      console.warn('⚠️ Socket emit failed (status update):', emitErr.message);
+    }
+
+    res.json({ message: 'Order status updated successfully', order });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+// Get single order by ID (for order details page)
+router.get('/:orderId', authenticateToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.id;
+
+    const order = await Order.findById(orderId).lean();
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Verify user owns this order (or is admin/staff)
+    if (order.user_id?.toString() !== userId && !['admin', 'staff'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Fetch pizza images for items
+    const pizzaIds = (order.items || []).map(it => it.pizza_id).filter(Boolean);
+    const uniquePizzaIds = [...new Set(pizzaIds)];
+    const Pizza = (await import('../models/Pizza.js')).default;
+    const pizzas = await Pizza.find({ _id: { $in: uniquePizzaIds } }).select('_id name image').lean();
+    const pizzaMap = new Map(pizzas.map(p => [p._id.toString(), p]));
+
+    const mapped = {
+      id: order._id.toString(),
+      status: order.status,
+      total: order.total_amount,
+      subtotal: order.total_amount * 0.85, // Rough estimate
+      tax: order.total_amount * 0.1,
+      delivery_fee: order.total_amount * 0.05,
+      created_at: order.created_at,
+      estimated_delivery: order.estimated_delivery_time,
+      payment_method: order.payment_method || 'razorpay',
+      payment_status: order.payment_status || 'completed',
+      notes: order.special_instructions,
+      delivery_address: order.delivery_address || {},
+      order_items: (order.items || []).map(it => {
+        const pizzaDetails = it.pizza_id ? pizzaMap.get(it.pizza_id.toString()) : null;
+        return {
+          id: it._id?.toString() || Math.random().toString(),
+          quantity: it.quantity,
+          price: it.total_price,
+          pizzas: {
+            name: it.name,
+            image: it.image || pizzaDetails?.image || 'https://via.placeholder.com/400x300?text=Pizza'
+          },
+          pizza_sizes: { name: it.size }
+        };
+      })
+    };
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Error fetching order details:', error);
+    res.status(500).json({ error: 'Failed to fetch order details' });
+  }
+});
+
+export default router;

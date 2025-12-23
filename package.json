@@ -1,0 +1,43 @@
+{
+  "name": "pizza-vamsi-unified",
+  "version": "1.0.0",
+  "description": "Unified pizza delivery platform with main website and admin dashboard",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev:backend": "cd project/server && node index.js",
+    "dev:frontend": "cd project && npm run dev",
+    "dev:admin": "cd admin-dashboard && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\"",
+    "install:all": "npm install && cd project && npm install && cd ../admin-dashboard && npm install && cd ../project/server && npm install",
+    "build:frontend": "cd project && npm run build",
+    "build:admin": "cd admin-dashboard && npm run build",
+    "build:server": "cd project/server && npm install --omit=dev",
+    "build:copy": "node scripts/copy-builds.js",
+    "build": "npm run build:frontend && npm run build:admin && npm run build:server && npm run build:copy",
+    "start": "node project/server/index.js",
+    "vercel-build": "npm run build"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.0",
+    "nodemailer": "^6.9.7",
+    "razorpay": "^2.9.6",
+    "socket.io": "^4.7.4",
+    "stripe": "^14.8.0",
+    "uuid": "^11.1.0",
+    "validator": "^13.15.15"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "nodemon": "^3.0.2"
+  }
+}

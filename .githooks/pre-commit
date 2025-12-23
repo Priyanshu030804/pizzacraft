@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Run the node secret scanner for staged files
+node ./scripts/check-secrets.js
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+  echo "Pre-commit hook detected possible secrets. Commit aborted."
+  exit $EXIT_CODE
+fi
+exit 0
